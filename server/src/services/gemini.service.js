@@ -1,32 +1,37 @@
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 
-// Created lazily (on first use) rather than at import time, so we don't
-// read process.env.GEMINI_API_KEY before dotenv.config() has run.
-let ai;
+let client;
+
 function getClient() {
-  if (!ai) {
-    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  if (!client) {
+    client = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
   }
-  return ai;
+  return client;
 }
 
-/**
- * Sends the user's message to Gemini, along with prior conversation
- * history, and returns the model's reply as plain text.
- *
- * history format expected from the client:
- * [
- *   { role: "user", parts: [{ text: "hi" }] },
- *   { role: "model", parts: [{ text: "hello!" }] },
- *   ...
- * ]
- */
 export async function getChatResponse(history = [], userMessage) {
-  const chat = getClient().chats.create({
-    model: "gemini-2.5-flash",
-    history,
+  const messages = [];
+
+  for (const item of history) {
+    messages.push({
+      role: item.role === "model" ? "assistant" : item.role,
+      content: item.parts[0].text,
+    });
+  }
+
+  messages.push({
+    role: "user",
+    content: userMessage,
   });
 
-  const response = await chat.sendMessage({ message: userMessage });
-  return response.text;
+  const completion = await getClient().chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages,
+    temperature: 0.7,
+    max_tokens: 1024,
+  });
+
+  return completion.choices[0].message.content;
 }
